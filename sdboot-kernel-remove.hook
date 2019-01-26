@@ -1,0 +1,9 @@
+[Trigger]
+Type = File
+Operation = Remove
+Target = boot/vmlinuz-*
+
+[Action]
+Description = Updating systemd-boot entries
+When = PostTransaction
+Exec = /usr/bin/sdboot-manage remove

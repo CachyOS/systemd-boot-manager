@@ -1,0 +1,191 @@
+#! /bin/bash
+#
+# sdboot-manage provides automation for systemd-boot on systems with multiple kernels
+
+config=/etc/sdboot-manage.conf
+bootctl=/usr/bin/bootctl
+
+# config variables
+export  LINUX_OPTIONS \
+        LINUX_FALLBACK_OPTIONS \
+        DEFAULT_ENTRY="latest" \
+        ENTRY_ROOT="manjarolinux" \
+        REMOVE_EXISTING="yes" \
+        OVERWRITE_EXISTING \
+        REMOVE_OLD="yes" \
+        PRESERVE_FOREIGN \
+        NO_AUTOGEN \
+        NO_AUTOUPDATE
+
+# Load the config file
+[[ -f ${config} ]] && . ${config}
+
+usage() {
+    echo "Usage: sdboot-manage [action]"
+    echo ""
+    echo "Actions:"
+    echo "  gen     generates entries for systemd-boot based on installed kernels"
+    echo "  remove  removes orphaned systemd-boot entries"
+    echo "  setup   installs systemd-boot and generate initial entries"
+    echo "  update  updates systemd-boot"
+    exit 1
+}
+
+get_entry_root() {
+    echo $1/loader/entries/${ENTRY_ROOT}$2
+}
+
+# removes a systemd-boot entry
+remove_entry() {
+    [[ ${1} =~ ^$(get_entry_root ${esp}).* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
+}
+
+# installs and configures systemd-boot
+setup_sdboot() {
+    $bootctl status &> /dev/null
+    if [[ $? == 0 ]]; then
+        echo -e "systemd-boot already installed"
+        exit 1
+    else
+        # install systemd-boot letting it detect esp
+        $bootctl install
+
+        # create a simple loader.conf
+        esp=$(bootctl -p)
+        echo "timeout 3" > "${esp}/loader/loader.conf"
+
+        # generate entries, ensure an initial set of entries is generated
+        [[ DEFAULT_ENTRY != "oldest" ]] && DEFAULT_ENTRY="latest"
+        generate_entries
+    fi
+}
+
+generate_entries() {
+    # get the esp path
+    esp=$(bootctl -p)
+    root='/'
+
+    # First, ensure we have a valid config
+    if [[ -f ${esp}/loader/loader.conf ]]; then
+        # only build entries if there is some place to put them
+        if [[ -d ${esp}/loader/entries ]]; then
+            # generate an appropriate options line
+            case $(findmnt -no FSTYPE ${root}) in
+                zfs)
+                    sdoptions="zfs=$(findmnt -no SOURCE ${root}) rw"
+                    ;;
+                btrfs)
+                    sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw rootflags=subvol=$(findmnt ${root} -no FSROOT)"
+                    ;;
+                *)  # for normal filesystems we try PARTUIID, UUID then device name
+                    if [[ $(findmnt -no PARTUUID ${root}) ]]; then
+                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw"
+                    elif [[ $(findmnt -no UUID ${root}) ]]; then
+                        sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw"
+                    else
+                        sdoptions="root=$(findmnt -no SOURCE ${root}) rw"
+                    fi
+                    ;;
+            esac
+
+            # handle LUKS - LUKS can be anywhere in the device tree so we search the whole tree starting from the fsroot
+            for i in $(lsblk -nslo NAME,TYPE $(findmnt -no SOURCE ${root}) 2> /dev/null | awk '{print $1":"$2}'); do
+                devname=${i%:*}
+                devtype=${i##*:}
+                if [[ $devtype == crypt ]]; then
+                    sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
+                fi
+            done
+
+            # handle ucode
+            ucode=""
+            for ucodefile in $(find ${esp} -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n"); do
+                ucode="${ucode}initrd\t${ucodefile}\n"
+            done
+
+            # when remove existing is set we want to start from an empty slate
+            if [[ ${REMOVE_EXISTING,,} == "yes" ]]; then
+                for entry in $(find "${esp}/loader/entries" -type f -name "*.conf"); do
+                    remove_entry $entry
+                done
+            fi
+            
+            # create entries for each installed kernel 
+            for kernel in $(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n"); do
+                kernelnum=$(echo ${kernel} | awk -F- '{print $2}')
+                arch=$(echo ${kernel} | awk -F- '{print $3}')
+
+                # first validate we don't already have an entry for this kernel
+                [[ ${OVERWRITE_EXISTING,,} != "yes" && -f $(get_entry_root "$esp" "$kernelnum")${kernelnum}.conf ]] && continue
+
+                echo -e "title\tManjaro Linux ${kernelnum}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum").conf
+                echo -e "title\tManjaro Linux ${kernelnum}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum")-fallback.conf
+            done
+ 
+            # set the default entry in loader.conf
+            entryroot=$(get_entry_root "${esp}")
+            if [[ ${DEFAULT_ENTRY} == "latest" ]]; then
+                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name ${entryroot##*/}* -printf "%P\n" | grep -v fallback.conf$ | sort -Vr | head -1)
+                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
+            elif [[ ${DEFAULT_ENTRY} == "oldest" ]]; then
+                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name ${entryroot##*/}* -printf "%P\n" | grep -v fallback.conf$ | sort -V | head -1 )
+                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
+            fi
+        else
+            echo "Error: ${esp}/loader/entries does not exist"
+        fi
+    else
+        echo "Error: ${esp}/loader/loader.conf does not exist"
+    fi
+}
+
+# removes entries for kernels which are no longer installed
+remove_orphan_entries() {
+    [[ ${REMOVE_OBSOLETE,,} != "yes" ]] && return
+
+    # get the esp path
+    esp=$(bootctl -p)
+
+    # find and remove all the entries with unmatched kernels
+    for kernel in $(comm -13 --nocheck-order <(find ${esp} -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
+        for entry in $(grep -l "${kernel}" "${esp}"/loader/entries/*); do
+            remove_entry "${entry}"
+        done
+    done
+}
+
+# make sure we are root
+if [[ $EUID -ne 0 ]]; then
+   echo "sdboot-manage must be run as root" 
+   exit 1
+fi
+
+$bootctl status &> /dev/null
+if [[ $? == 1 && $1 != "setup" ]]; then
+    echo -e "systemd-boot not installed\nTry sdboot-manage setup to install"
+    exit 1
+fi
+
+case $1 in
+    autogen)
+        [[ ${NO_AUTOGEN} != "yes" ]] && generate_entries
+        ;;
+    autoupdate)
+        [[ ${NO_AUTOUPDATE} != "yes" ]] && $bootctl update
+        ;;
+    gen)
+        generate_entries
+        ;;
+    remove)
+        remove_orphan_entries
+        ;;
+    setup)
+        setup_sdboot
+        ;;
+    update)
+        $bootctl update
+        ;;
+    *)
+        usage
+        ;;
+esac
