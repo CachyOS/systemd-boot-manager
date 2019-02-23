@@ -8,6 +8,7 @@ bootctl=/usr/bin/bootctl
 # config variables
 export  LINUX_OPTIONS \
         LINUX_FALLBACK_OPTIONS \
+        LINUX_USE_SWAP_FOR_RESUME \
         DEFAULT_ENTRY="latest" \
         ENTRY_ROOT="manjarolinux" \
         ENTRY_TITLE="Manjaro Linux" \
@@ -105,6 +106,15 @@ generate_entries() {
             if [[ $devtype == crypt ]]; then
                 # handle cryptdevice
                 sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+            fi
+
+            # if LINUX_USE_SWAP_FOR_RESUME is enabled, pass the UUID of the first detected swap device as an argument to the `resume` kernel parameter
+            if [[ ${LINUX_USE_SWAP_FOR_RESUME,,} == "yes" ]]; then
+                swapdev=$(swapon --show=NAME --noheadings | head -1)
+                if [[ -n ${swapdev} ]]; then
+                    swapdev_uuid=$(lsblk -ndlo UUID "${swapdev}")
+                    sdoptions="${sdoptions} resume=UUID=${swapdev_uuid}"
+                fi
             fi
 
             # handle ucode
