@@ -98,7 +98,12 @@ generate_entries() {
             esac
 
             # handle LUKS - LUKS can be anywhere in the device tree so we search the whole tree starting from the fsroot
-            for i in $(lsblk -nslo NAME,TYPE $(findmnt -no SOURCE ${root}) 2> /dev/null | awk '{print $1":"$2}'); do
+            srcdev_matcher='(.+)\[.+\]'
+            srcdev=$(findmnt -no SOURCE ${root})
+            if [[ ${srcdev} =~ ${srcdev_matcher} ]]; then
+                srcdev=${BASH_REMATCH[1]}
+            fi
+            for i in $(lsblk -nslo NAME,TYPE ${srcdev} 2> /dev/null | awk '{print $1":"$2}'); do
                 devname=${i%:*}
                 devtype=${i##*:}
                 if [[ $devtype == crypt ]]; then
