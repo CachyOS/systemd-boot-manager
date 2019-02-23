@@ -87,10 +87,10 @@ generate_entries() {
                     fi
                     ;;
                 *)  # for normal filesystems we try PARTUIID, UUID then device name
-                    if [[ $(findmnt -no PARTUUID ${root}) ]]; then
-                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw"
-                    elif [[ $(findmnt -no UUID ${root}) ]]; then
+                    if [[ $(findmnt -no UUID ${root}) ]]; then
                         sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw"
+                    elif [[ $(findmnt -no PARTUUID ${root}) ]]; then
+                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw"
                     else
                         sdoptions="root=$(findmnt -no SOURCE ${root}) rw"
                     fi
