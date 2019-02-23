@@ -74,31 +74,35 @@ generate_entries() {
     if [[ -f ${esp}/loader/loader.conf ]]; then
         # only build entries if there is some place to put them
         if [[ -d ${esp}/loader/entries ]]; then
+            srcdev=$(findmnt -no SOURCE ${root})
+            srcdev_uuid=$(findmnt -no UUID ${root})
+            srcdev_partuuid=$(findmnt -no PARTUUID ${root})
+            srcdev_fsroot=$(findmnt -no FSROOT ${root})
+
             # generate an appropriate options line
             case $(findmnt -no FSTYPE ${root}) in
                 zfs)
-                    sdoptions="zfs=$(findmnt -no SOURCE ${root}) rw"
+                    sdoptions="zfs=${srcdev} rw"
                     ;;
                 btrfs)
-                    if [[ $(findmnt -no UUID ${root}) ]]; then
-                        sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw rootflags=subvol=$(findmnt ${root} -no FSROOT)"
+                    if [[ ${srcdev_uuid} ]]; then
+                        sdoptions="root=UUID=${srcdev_uuid} rw rootflags=subvol=${srcdev_fsroot}"
                     else
-                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw rootflags=subvol=$(findmnt ${root} -no FSROOT)"
+                        sdoptions="root=PARTUUID=${srcdev_partuuid} rw rootflags=subvol=${srcdev_fsroot}"
                     fi
                     ;;
                 *)
-                    if [[ $(findmnt -no UUID ${root}) ]]; then
-                        sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw"
+                    if [[ ${srcdev_uuid} ]]; then
+                        sdoptions="root=UUID=${srcdev_uuid} rw"
                     elif [[ $(findmnt -no PARTUUID ${root}) ]]; then
-                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw"
+                        sdoptions="root=PARTUUID=${srcdev_partuuid} rw"
                     else
-                        sdoptions="root=$(findmnt -no SOURCE ${root}) rw"
+                        sdoptions="root=${srcdev} rw"
                     fi
                     ;;
             esac
 
-            srcdev=$(findmnt -no UUID ${root})
-            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/${srcdev} 2> /dev/null)
+            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/${srcdev_uuid} 2> /dev/null)
             if [[ $devtype == crypt ]]; then
                 # handle cryptdevice
                 sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
