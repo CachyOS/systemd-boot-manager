@@ -84,16 +84,16 @@ generate_entries() {
                     sdoptions="zfs=${srcdev} rw"
                     ;;
                 btrfs)
-                    if [[ ${srcdev_uuid} ]]; then
+                    if [[ -n ${srcdev_uuid} ]]; then
                         sdoptions="root=UUID=${srcdev_uuid} rw rootflags=subvol=${srcdev_fsroot}"
                     else
                         sdoptions="root=PARTUUID=${srcdev_partuuid} rw rootflags=subvol=${srcdev_fsroot}"
                     fi
                     ;;
                 *)
-                    if [[ ${srcdev_uuid} ]]; then
+                    if [[ -n ${srcdev_uuid} ]]; then
                         sdoptions="root=UUID=${srcdev_uuid} rw"
-                    elif [[ $(findmnt -no PARTUUID ${root}) ]]; then
+                    elif [[ -n $(findmnt -no PARTUUID ${root}) ]]; then
                         sdoptions="root=PARTUUID=${srcdev_partuuid} rw"
                     else
                         sdoptions="root=${srcdev} rw"
