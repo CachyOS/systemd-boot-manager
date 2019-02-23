@@ -60,7 +60,7 @@ setup_sdboot() {
         echo "timeout 3" > "${esp}/loader/loader.conf"
 
         # generate entries, ensure an initial set of entries is generated
-        [[ DEFAULT_ENTRY != "oldest" ]] && DEFAULT_ENTRY="latest"
+        [[ ${DEFAULT_ENTRY} != "oldest" ]] && DEFAULT_ENTRY="latest"
         generate_entries
     fi
 }
