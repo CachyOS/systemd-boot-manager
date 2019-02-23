@@ -97,19 +97,12 @@ generate_entries() {
                     ;;
             esac
 
-            srcdev_matcher='(.+)\[.+\]'
-            srcdev=$(findmnt -no SOURCE ${root})
-            if [[ ${srcdev} =~ ${srcdev_matcher} ]]; then
-                srcdev=${BASH_REMATCH[1]}
+            srcdev=$(findmnt -no UUID ${root})
+            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/${srcdev} 2> /dev/null)
+            if [[ $devtype == crypt ]]; then
+                # handle cryptdevice
+                sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
             fi
-            for i in $(lsblk -ndlo NAME,TYPE ${srcdev} 2> /dev/null | awk '{print $1":"$2}'); do
-                devname=${i%:*}
-                devtype=${i##*:}
-                if [[ $devtype == crypt ]]; then
-                    # handle cryptdevice
-                    sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
-                fi
-            done
 
             # handle ucode
             ucode=""
