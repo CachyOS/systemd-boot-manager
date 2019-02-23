@@ -93,7 +93,7 @@ generate_entries() {
                 *)
                     if [[ -n ${srcdev_uuid} ]]; then
                         sdoptions="root=UUID=${srcdev_uuid} rw"
-                    elif [[ -n $(findmnt -no PARTUUID ${root}) ]]; then
+                    elif [[ -n ${srcdev_partuuid} ]]; then
                         sdoptions="root=PARTUUID=${srcdev_partuuid} rw"
                     else
                         sdoptions="root=${srcdev} rw"
