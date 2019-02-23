@@ -20,7 +20,7 @@ export  LINUX_OPTIONS \
         NO_AUTOUPDATE
 
 # Load the config file
-[[ -f ${config} ]] && . ${config}
+[[ -f ${config} ]] && . "${config}"
 
 usage() {
     echo "Usage: sdboot-manage [action]"
@@ -34,15 +34,15 @@ usage() {
 }
 
 get_entry_root() {
-    echo -n $1/loader/entries/${ENTRY_ROOT}
+    echo -n "$1/loader/entries/${ENTRY_ROOT}"
     if [[ ${ENTRY_APPEND_KVER,,} == "yes" ]]; then
-        echo -n $2
+        echo -n "$2"
     fi
 }
 
 # removes a systemd-boot entry
 remove_entry() {
-    [[ ${1} =~ ^$(get_entry_root ${esp}).* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
+    [[ ${1} =~ ^$(get_entry_root "${esp}").* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
 }
 
 # installs and configures systemd-boot
@@ -102,29 +102,29 @@ generate_entries() {
                     ;;
             esac
 
-            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/${srcdev_uuid} 2> /dev/null)
+            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
             if [[ $devtype == crypt ]]; then
                 # handle cryptdevice
-                sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
+                sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
             fi
 
             # handle ucode
             ucode=""
-            for ucodefile in $(find ${esp} -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n"); do
+            while read -r ucodefile; do
                 ucode="${ucode}initrd\t${ucodefile}\n"
-            done
+            done < <(find "${esp}" -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n")
 
             # when remove existing is set we want to start from an empty slate
             if [[ ${REMOVE_EXISTING,,} == "yes" ]]; then
-                for entry in $(find "${esp}/loader/entries" -type f -name "*.conf"); do
-                    remove_entry $entry
-                done
+                while read -r entry; do
+                    remove_entry "${entry}"
+                done < <(find "${esp}/loader/entries" -type f -name "*.conf")
             fi
 
             # create entries for each installed kernel
-            for kernel in $(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n"); do
-                kernelnum=$(echo ${kernel} | awk -F- '{print $2}')
-                arch=$(echo ${kernel} | awk -F- '{print $3}')
+            while read -r kernel; do
+                kernelnum=$(echo "${kernel}" | awk -F- '{print $2}')
+                arch=$(echo "${kernel}" | awk -F- '{print $3}')
 
                 # first validate we don't already have an entry for this kernel
                 [[ ${OVERWRITE_EXISTING,,} != "yes" && -f $(get_entry_root "$esp" "$kernelnum")${kernelnum}.conf ]] && continue
@@ -134,9 +134,9 @@ generate_entries() {
                     title="${title} ${kernelnum}"
                 fi
 
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum").conf
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum")-fallback.conf
-            done
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum").conf"
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum")-fallback.conf"
+            done < <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n")
 
             # set the default entry in loader.conf
             entryroot=$(get_entry_root "${esp}")
@@ -163,10 +163,10 @@ remove_orphan_entries() {
     esp=$(bootctl -p)
 
     # find and remove all the entries with unmatched kernels
-    for kernel in $(comm -13 --nocheck-order <(find ${esp} -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
-        for entry in $(grep -l "${kernel}" "${esp}"/loader/entries/*); do
+    for kernel in $(comm -13 --nocheck-order <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
+        while read -r entry; do
             remove_entry "${entry}"
-        done
+        done < <(grep -l "${kernel}" "${esp}"/loader/entries/*)
     done
 }
 
