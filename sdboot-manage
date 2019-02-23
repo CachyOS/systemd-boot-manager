@@ -86,7 +86,7 @@ generate_entries() {
                         sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw rootflags=subvol=$(findmnt ${root} -no FSROOT)"
                     fi
                     ;;
-                *)  # for normal filesystems we try PARTUIID, UUID then device name
+                *)
                     if [[ $(findmnt -no UUID ${root}) ]]; then
                         sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw"
                     elif [[ $(findmnt -no PARTUUID ${root}) ]]; then
@@ -97,7 +97,6 @@ generate_entries() {
                     ;;
             esac
 
-            # handle LUKS - LUKS can be anywhere in the device tree so we search the whole tree starting from the fsroot
             srcdev_matcher='(.+)\[.+\]'
             srcdev=$(findmnt -no SOURCE ${root})
             if [[ ${srcdev} =~ ${srcdev_matcher} ]]; then
@@ -107,6 +106,7 @@ generate_entries() {
                 devname=${i%:*}
                 devtype=${i##*:}
                 if [[ $devtype == crypt ]]; then
+                    # handle cryptdevice
                     sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
                 fi
             done
