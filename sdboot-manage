@@ -107,7 +107,7 @@ generate_entries() {
                 devname=${i%:*}
                 devtype=${i##*:}
                 if [[ $devtype == crypt ]]; then
-                    sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
+                    sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
                 fi
             done
 
