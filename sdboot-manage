@@ -105,14 +105,14 @@ generate_entries() {
             read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
             if [[ $devtype == crypt ]]; then
                 # handle cryptdevice
-                sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndlo UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+                sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
             fi
 
             # if LINUX_USE_SWAP_FOR_RESUME is enabled, pass the UUID of the first detected swap device as an argument to the `resume` kernel parameter
             if [[ ${LINUX_USE_SWAP_FOR_RESUME,,} == "yes" ]]; then
                 swapdev=$(swapon --show=NAME --noheadings | head -1)
                 if [[ -n ${swapdev} ]]; then
-                    swapdev_uuid=$(lsblk -ndlo UUID "${swapdev}")
+                    swapdev_uuid=$(blkid -o value -s UUID "${swapdev}")
                     sdoptions="${sdoptions} resume=UUID=${swapdev_uuid}"
                 fi
             fi
