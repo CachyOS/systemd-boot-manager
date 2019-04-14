@@ -108,6 +108,11 @@ generate_entries() {
                 sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
             fi
 
+            # if LINUX_USE_DEVICE_FOR_RESUME is enabled, pass its identifier to the `resume` kernel parameter
+            if [[ -n ${LINUX_USE_DEVICE_FOR_RESUME,,} ]]; then
+                sdoptions="${sdoptions} resume=${LINUX_USE_DEVICE_FOR_RESUME}"
+            fi
+
             # if LINUX_USE_SWAP_FOR_RESUME is enabled, pass the UUID of the first detected swap device as an argument to the `resume` kernel parameter
             if [[ ${LINUX_USE_SWAP_FOR_RESUME,,} == "yes" ]]; then
                 swapdev=$(swapon --show=NAME --noheadings | head -1)
