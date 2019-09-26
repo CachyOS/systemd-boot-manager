@@ -8,8 +8,11 @@ bootctl=/usr/bin/bootctl
 # config variables
 export  LINUX_OPTIONS \
         LINUX_FALLBACK_OPTIONS \
+        LINUX_USE_SWAP_FOR_RESUME \
         DEFAULT_ENTRY="latest" \
         ENTRY_ROOT="manjarolinux" \
+        ENTRY_TITLE="Manjaro Linux" \
+        ENTRY_APPEND_KVER="yes" \
         REMOVE_EXISTING="yes" \
         OVERWRITE_EXISTING \
         REMOVE_OLD="yes" \
@@ -18,7 +21,7 @@ export  LINUX_OPTIONS \
         NO_AUTOUPDATE
 
 # Load the config file
-[[ -f ${config} ]] && . ${config}
+[[ -f ${config} ]] && . "${config}"
 
 usage() {
     echo "Usage: sdboot-manage [action]"
@@ -32,18 +35,20 @@ usage() {
 }
 
 get_entry_root() {
-    echo $1/loader/entries/${ENTRY_ROOT}$2
+    echo -n "$1/loader/entries/${ENTRY_ROOT}"
+    if [[ ${ENTRY_APPEND_KVER,,} == "yes" ]]; then
+        echo -n "$2"
+    fi
 }
 
 # removes a systemd-boot entry
 remove_entry() {
-    [[ ${1} =~ ^$(get_entry_root ${esp}).* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
+    [[ ${1} =~ ^$(get_entry_root "${esp}").* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
 }
 
 # installs and configures systemd-boot
 setup_sdboot() {
-    $bootctl status &> /dev/null
-    if [[ $? == 0 ]]; then
+    if $bootctl status &> /dev/null; then
         echo -e "systemd-boot already installed"
         exit 1
     else
@@ -55,7 +60,7 @@ setup_sdboot() {
         echo "timeout 3" > "${esp}/loader/loader.conf"
 
         # generate entries, ensure an initial set of entries is generated
-        [[ DEFAULT_ENTRY != "oldest" ]] && DEFAULT_ENTRY="latest"
+        [[ ${DEFAULT_ENTRY} != "oldest" ]] && DEFAULT_ENTRY="latest"
         generate_entries
     fi
 }
@@ -69,66 +74,91 @@ generate_entries() {
     if [[ -f ${esp}/loader/loader.conf ]]; then
         # only build entries if there is some place to put them
         if [[ -d ${esp}/loader/entries ]]; then
+            srcdev=$(findmnt -no SOURCE ${root})
+            srcdev_uuid=$(findmnt -no UUID ${root})
+            srcdev_partuuid=$(findmnt -no PARTUUID ${root})
+            srcdev_fsroot=$(findmnt -no FSROOT ${root})
+
             # generate an appropriate options line
             case $(findmnt -no FSTYPE ${root}) in
                 zfs)
-                    sdoptions="zfs=$(findmnt -no SOURCE ${root}) rw"
+                    sdoptions="zfs=${srcdev} rw"
                     ;;
                 btrfs)
-                    sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw rootflags=subvol=$(findmnt ${root} -no FSROOT)"
-                    ;;
-                *)  # for normal filesystems we try PARTUIID, UUID then device name
-                    if [[ $(findmnt -no PARTUUID ${root}) ]]; then
-                        sdoptions="root=PARTUUID=$(findmnt -no PARTUUID ${root}) rw"
-                    elif [[ $(findmnt -no UUID ${root}) ]]; then
-                        sdoptions="root=UUID=$(findmnt -no UUID ${root}) rw"
+                    if [[ -n ${srcdev_uuid} ]]; then
+                        sdoptions="root=UUID=${srcdev_uuid} rw rootflags=subvol=${srcdev_fsroot}"
                     else
-                        sdoptions="root=$(findmnt -no SOURCE ${root}) rw"
+                        sdoptions="root=PARTUUID=${srcdev_partuuid} rw rootflags=subvol=${srcdev_fsroot}"
+                    fi
+                    ;;
+                *)
+                    if [[ -n ${srcdev_uuid} ]]; then
+                        sdoptions="root=UUID=${srcdev_uuid} rw"
+                    elif [[ -n ${srcdev_partuuid} ]]; then
+                        sdoptions="root=PARTUUID=${srcdev_partuuid} rw"
+                    else
+                        sdoptions="root=${srcdev} rw"
                     fi
                     ;;
             esac
 
-            # handle LUKS - LUKS can be anywhere in the device tree so we search the whole tree starting from the fsroot
-            for i in $(lsblk -nslo NAME,TYPE $(findmnt -no SOURCE ${root}) 2> /dev/null | awk '{print $1":"$2}'); do
-                devname=${i%:*}
-                devtype=${i##*:}
-                if [[ $devtype == crypt ]]; then
-                    sdoptions="${sdoptions} cryptdevice=UUID=$(lsblk -ndo UUID $(cryptsetup status ${devname} | grep device | awk '{print $2}')):${devname}"
+            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
+            if [[ $devtype == crypt ]]; then
+                # handle cryptdevice
+                sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+            fi
+
+            # if LINUX_USE_DEVICE_FOR_RESUME is enabled, pass its identifier to the `resume` kernel parameter
+            if [[ -n ${LINUX_USE_DEVICE_FOR_RESUME,,} ]]; then
+                sdoptions="${sdoptions} resume=${LINUX_USE_DEVICE_FOR_RESUME}"
+            fi
+
+            # if LINUX_USE_SWAP_FOR_RESUME is enabled, pass the UUID of the first detected swap device as an argument to the `resume` kernel parameter
+            if [[ ${LINUX_USE_SWAP_FOR_RESUME,,} == "yes" ]]; then
+                swapdev=$(swapon --show=NAME --noheadings | head -1)
+                if [[ -n ${swapdev} ]]; then
+                    swapdev_uuid=$(blkid -o value -s UUID "${swapdev}")
+                    sdoptions="${sdoptions} resume=UUID=${swapdev_uuid}"
                 fi
-            done
+            fi
 
             # handle ucode
             ucode=""
-            for ucodefile in $(find ${esp} -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n"); do
+            while read -r ucodefile; do
                 ucode="${ucode}initrd\t${ucodefile}\n"
-            done
+            done < <(find "${esp}" -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n")
 
             # when remove existing is set we want to start from an empty slate
             if [[ ${REMOVE_EXISTING,,} == "yes" ]]; then
-                for entry in $(find "${esp}/loader/entries" -type f -name "*.conf"); do
-                    remove_entry $entry
-                done
+                while read -r entry; do
+                    remove_entry "${entry}"
+                done < <(find "${esp}/loader/entries" -type f -name "*.conf")
             fi
-            
-            # create entries for each installed kernel 
-            for kernel in $(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n"); do
-                kernelnum=$(echo ${kernel} | awk -F- '{print $2}')
-                arch=$(echo ${kernel} | awk -F- '{print $3}')
+
+            # create entries for each installed kernel
+            while read -r kernel; do
+                kernelnum=$(echo "${kernel}" | awk -F- '{print $2}')
+                arch=$(echo "${kernel}" | awk -F- '{print $3}')
 
                 # first validate we don't already have an entry for this kernel
                 [[ ${OVERWRITE_EXISTING,,} != "yes" && -f $(get_entry_root "$esp" "$kernelnum")${kernelnum}.conf ]] && continue
 
-                echo -e "title\tManjaro Linux ${kernelnum}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum").conf
-                echo -e "title\tManjaro Linux ${kernelnum}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > $(get_entry_root "$esp" "$kernelnum")-fallback.conf
-            done
- 
+                title=${ENTRY_TITLE}
+                if [[ ${ENTRY_APPEND_KVER,,} == "yes" ]]; then
+                    title="${title} ${kernelnum}"
+                fi
+
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum").conf"
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum")-fallback.conf"
+            done < <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n")
+
             # set the default entry in loader.conf
             entryroot=$(get_entry_root "${esp}")
             if [[ ${DEFAULT_ENTRY} == "latest" ]]; then
-                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name ${entryroot##*/}* -printf "%P\n" | grep -v fallback.conf$ | sort -Vr | head -1)
+                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -Vr | head -1)
                 sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
             elif [[ ${DEFAULT_ENTRY} == "oldest" ]]; then
-                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name ${entryroot##*/}* -printf "%P\n" | grep -v fallback.conf$ | sort -V | head -1 )
+                defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -V | head -1 )
                 sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
             fi
         else
@@ -147,16 +177,16 @@ remove_orphan_entries() {
     esp=$(bootctl -p)
 
     # find and remove all the entries with unmatched kernels
-    for kernel in $(comm -13 --nocheck-order <(find ${esp} -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
-        for entry in $(grep -l "${kernel}" "${esp}"/loader/entries/*); do
+    for kernel in $(comm -13 --nocheck-order <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
+        while read -r entry; do
             remove_entry "${entry}"
-        done
+        done < <(grep -l "${kernel}" "${esp}"/loader/entries/*)
     done
 }
 
 # make sure we are root
 if [[ $EUID -ne 0 ]]; then
-   echo "sdboot-manage must be run as root" 
+   echo "sdboot-manage must be run as root"
    exit 1
 fi
 
