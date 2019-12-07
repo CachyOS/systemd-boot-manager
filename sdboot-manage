@@ -15,7 +15,7 @@ export  LINUX_OPTIONS \
         ENTRY_APPEND_KVER="yes" \
         REMOVE_EXISTING="yes" \
         OVERWRITE_EXISTING \
-        REMOVE_OLD="yes" \
+        REMOVE_OBSOLETE="yes" \
         PRESERVE_FOREIGN \
         NO_AUTOGEN \
         NO_AUTOUPDATE
