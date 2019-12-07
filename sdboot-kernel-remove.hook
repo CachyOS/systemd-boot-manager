@@ -1,7 +1,8 @@
 [Trigger]
 Type = File
 Operation = Remove
-Target = boot/vmlinuz-*
+Target = usr/lib/modules/*/vmlinuz
+Target = boot/vmlinuz*
 
 [Action]
 Description = Updating systemd-boot entries

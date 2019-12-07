@@ -2,7 +2,8 @@
 Type = File
 Operation = Install
 Operation = Upgrade
-Target = boot/vmlinuz-*
+Target = usr/lib/modules/*/vmlinuz
+Target = boot/vmlinuz*
 
 [Action]
 Description = Updating systemd-boot entries
