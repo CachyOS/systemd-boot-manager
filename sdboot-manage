@@ -102,11 +102,13 @@ generate_entries() {
                     ;;
             esac
 
-            read -r devname devtype < <(lsblk -ndlo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
-            if [[ $devtype == crypt ]]; then
-                # handle cryptdevice
-                sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
-            fi
+            # Search for a crypt device
+            while read -r devname devtype; do
+                if [[ $devtype == crypt ]]; then
+                    # handle cryptdevice
+                    sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+                fi
+            done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
 
             # if LINUX_USE_DEVICE_FOR_RESUME is enabled, pass its identifier to the `resume` kernel parameter
             if [[ -n ${LINUX_USE_DEVICE_FOR_RESUME,,} ]]; then
