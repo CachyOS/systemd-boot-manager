@@ -1,5 +1,5 @@
 pkgname=systemd-boot-manager
-pkgver=0.7
+pkgver=0.8
 pkgrel=1
 pkgdesc='A simple tool to maintain systemd-boot & systemd-boot entries for Manjaro'
 arch=(any)
@@ -10,7 +10,7 @@ depends=(systemd
          findutils
          grep
          gawk)
-source=(git+https://gitlab.com/dalto.8/systemd-boot-manager.git)
+source=(git+https://gitlab.com/dalto.8/systemd-boot-manager.git#tag=$pkgver)
 sha256sums=('SKIP')
 package()
 {
