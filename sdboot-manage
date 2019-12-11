@@ -18,7 +18,9 @@ export  LINUX_OPTIONS \
         REMOVE_OBSOLETE="yes" \
         PRESERVE_FOREIGN \
         NO_AUTOGEN \
-        NO_AUTOUPDATE
+        NO_AUTOUPDATE \
+        CDISCARD \
+        DISCARD 
 
 # Load the config file
 [[ -f ${config} ]] && . "${config}"
@@ -90,6 +92,9 @@ generate_entries() {
                     else
                         sdoptions="root=PARTUUID=${srcdev_partuuid} rw rootflags=subvol=${srcdev_fsroot}"
                     fi
+                    if [[ ${CDISCARD,,} == "yes" ]]; then
+                        sdoptions="${sdoptions},discard"
+                    fi
                     ;;
                 *)
                     if [[ -n ${srcdev_uuid} ]]; then
@@ -99,6 +104,9 @@ generate_entries() {
                     else
                         sdoptions="root=${srcdev} rw"
                     fi
+                    if [[ ${CDISCARD,,} == "yes" ]]; then
+                        sdoptions="${sdoptions} rootflags=discard"
+                    fi
                     ;;
             esac
 
@@ -107,6 +115,9 @@ generate_entries() {
                 if [[ $devtype == crypt ]]; then
                     # handle cryptdevice
                     sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+                    if [[ ${DISCARD,,} == "yes" ]]; then
+                        sdoptions="${sdoptions}:allow-discard"
+                    fi
                 fi
             done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
 
