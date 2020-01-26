@@ -80,9 +80,10 @@ generate_entries() {
             srcdev_uuid=$(findmnt -no UUID ${root})
             srcdev_partuuid=$(findmnt -no PARTUUID ${root})
             srcdev_fsroot=$(findmnt -no FSROOT ${root})
+            root_fstype=$(findmnt -no FSTYPE ${root})
 
             # generate an appropriate options line
-            case $(findmnt -no FSTYPE ${root}) in
+            case ${root_fstype} in
                 zfs)
                     sdoptions="zfs=${srcdev} rw"
                     ;;
@@ -111,6 +112,17 @@ generate_entries() {
             esac
 
             # Search for a crypt device
+
+            # get the UUID for the crypt root - requires special handling for zfs
+            if [[ ${root_fstype} == "zfs" ]]; then
+                zpool=${srcdev%%/*}
+                zpool_device=$(zpool status -LP ${zpool} | grep "/dev/" | awk '{print $1}')
+                top_level_uuid=$(lsblk -no UUID ${zpool_device})
+            else
+                top_level_uuid=${srcdev_uuid}
+            fi
+
+            # now that we have the UUID search all the devices above it to find a cryptroot
             while read -r devname devtype; do
                 if [[ $devtype == crypt ]]; then
                     # handle cryptdevice
@@ -119,7 +131,7 @@ generate_entries() {
                         sdoptions="${sdoptions}:allow-discard"
                     fi
                 fi
-            done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${srcdev_uuid}" 2> /dev/null)
+            done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${top_level_uuid}" 2> /dev/null)
 
             # if LINUX_USE_DEVICE_FOR_RESUME is enabled, pass its identifier to the `resume` kernel parameter
             if [[ -n ${LINUX_USE_DEVICE_FOR_RESUME,,} ]]; then
