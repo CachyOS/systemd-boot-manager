@@ -202,7 +202,7 @@ remove_orphan_entries() {
     esp=$(bootctl -p)
 
     # find and remove all the entries with unmatched kernels
-    for kernel in $(comm -13 --nocheck-order <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq)); do
+    for kernel in $(comm -13 <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq | sort) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
         while read -r entry; do
             remove_entry "${entry}"
         done < <(grep -l "${kernel}" "${esp}"/loader/entries/*)
