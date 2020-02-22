@@ -1,7 +1,7 @@
 [Trigger]
 Type = Path
 Operation = Remove
-Target = boot/vmlinuz*.kver
+Target = boot/linux*.kver
 
 [Action]
 Description = Updating systemd-boot entries
