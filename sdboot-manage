@@ -13,6 +13,7 @@ export  LINUX_OPTIONS \
         ENTRY_ROOT="manjarolinux" \
         ENTRY_TITLE="Manjaro Linux" \
         ENTRY_APPEND_KVER="yes" \
+        KERNEL_PATTERN="vmlinuz-[0-9]*-*" \
         REMOVE_EXISTING="yes" \
         OVERWRITE_EXISTING \
         REMOVE_OBSOLETE="yes" \
@@ -175,7 +176,7 @@ generate_entries() {
 
                 echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum").conf"
                 echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum")-fallback.conf"
-            done < <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n")
+            done < <(find "${esp}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n")
 
             # set the default entry in loader.conf
             entryroot=$(get_entry_root "${esp}")
@@ -202,7 +203,7 @@ remove_orphan_entries() {
     esp=$(bootctl -p)
 
     # find and remove all the entries with unmatched kernels
-    for kernel in $(comm -13 <(find "${esp}" -maxdepth 2 -type f -name "vmlinuz-*-*" -printf "/%P\n" | uniq | sort) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
+    for kernel in $(comm -13 <(find "${esp}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n" | uniq | sort) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
         while read -r entry; do
             remove_entry "${entry}"
         done < <(grep -l "${kernel}" "${esp}"/loader/entries/*)
