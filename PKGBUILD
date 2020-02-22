@@ -1,5 +1,5 @@
 pkgname=systemd-boot-manager
-pkgver=0.8
+pkgver=0.9
 pkgrel=1
 pkgdesc='A simple tool to maintain systemd-boot & systemd-boot entries for Manjaro'
 arch=(any)
