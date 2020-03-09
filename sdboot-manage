@@ -3,6 +3,7 @@
 # sdboot-manage provides automation for systemd-boot on systems with multiple kernels
 
 config=/etc/sdboot-manage.conf
+[[ ! -z $2 ]] && [[ ! $2 =~ --esp-path=.+ ]] && usage
 bootctl="/usr/bin/bootctl ""$2"
 
 # config variables
