@@ -3,13 +3,16 @@
 # sdboot-manage provides automation for systemd-boot on systems with multiple kernels
 
 usage() {
-    echo "Usage: sdboot-manage [action]"
+    echo "Usage: sdboot-manage [action] [option]"
     echo ""
     echo "Actions:"
     echo "  gen     generates entries for systemd-boot based on installed kernels"
     echo "  remove  removes orphaned systemd-boot entries"
     echo "  setup   installs systemd-boot and generate initial entries"
     echo "  update  updates systemd-boot"
+    echo ""
+    echo "Optional Argument:
+    echo "  --esp-path=<path>  specify <path> for sdboot-manage to work on"
     exit 1
 }
 
