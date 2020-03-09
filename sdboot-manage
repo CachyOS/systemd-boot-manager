@@ -11,7 +11,7 @@ usage() {
     echo "  setup   installs systemd-boot and generate initial entries"
     echo "  update  updates systemd-boot"
     echo ""
-    echo "Optional Argument:
+    echo "Optional Argument:"
     echo "  --esp-path=<path>  specify <path> for sdboot-manage to work on"
     exit 1
 }
