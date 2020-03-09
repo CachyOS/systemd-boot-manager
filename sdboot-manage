@@ -2,6 +2,17 @@
 #
 # sdboot-manage provides automation for systemd-boot on systems with multiple kernels
 
+usage() {
+    echo "Usage: sdboot-manage [action]"
+    echo ""
+    echo "Actions:"
+    echo "  gen     generates entries for systemd-boot based on installed kernels"
+    echo "  remove  removes orphaned systemd-boot entries"
+    echo "  setup   installs systemd-boot and generate initial entries"
+    echo "  update  updates systemd-boot"
+    exit 1
+}
+
 config=/etc/sdboot-manage.conf
 [[ ! -z $2 ]] && [[ ! $2 =~ --esp-path=.+ ]] && usage
 bootctl="/usr/bin/bootctl ""$2"
@@ -26,17 +37,6 @@ export  LINUX_OPTIONS \
 
 # Load the config file
 [[ -f ${config} ]] && . "${config}"
-
-usage() {
-    echo "Usage: sdboot-manage [action]"
-    echo ""
-    echo "Actions:"
-    echo "  gen     generates entries for systemd-boot based on installed kernels"
-    echo "  remove  removes orphaned systemd-boot entries"
-    echo "  setup   installs systemd-boot and generate initial entries"
-    echo "  update  updates systemd-boot"
-    exit 1
-}
 
 get_entry_root() {
     echo -n "$1/loader/entries/${ENTRY_ROOT}"
