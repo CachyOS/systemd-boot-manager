@@ -3,7 +3,7 @@
 # sdboot-manage provides automation for systemd-boot on systems with multiple kernels
 
 usage() {
-    echo "Usage: sdboot-manage [action] [option]"
+    echo "Usage: sdboot-manage [options] [action]"
     echo ""
     echo "Actions:"
     echo "  gen     generates entries for systemd-boot based on installed kernels"
@@ -11,14 +11,32 @@ usage() {
     echo "  setup   installs systemd-boot and generate initial entries"
     echo "  update  updates systemd-boot"
     echo ""
-    echo "Optional Argument:"
-    echo "  --esp-path=<path>  specify <path> for sdboot-manage to work on"
+    echo "Options:"
+    echo "  -e,--esp-path=<path>  specify <path> to be used for esp"
+    echo "  -c,--config=<path>  location of config file"
     exit 1
 }
 
-config=/etc/sdboot-manage.conf
-[[ ! -z $2 ]] && [[ ! $2 =~ --esp-path=.+ ]] && usage
-bootctl="/usr/bin/bootctl ""$2"
+# parse the options
+for i in "$@"; do
+    case $i in
+        -e=*|--esp-path=*)
+            ESP="${i#*=}"
+            shift 
+        ;;
+        -c=*|--config=*)
+            config="${i#*=}"
+            shift 
+        ;;
+        *)
+            usage
+        ;;
+    esac
+done
+
+# set defaults for optional arguments if they are not passed on the command-line
+[[ -z ${ESP} ]] && ESP=$(bootctl -p)
+[[ -z ${config} ]] && config=/etc/sdboot-manage.conf
 
 # config variables
 export  LINUX_OPTIONS \
@@ -50,21 +68,20 @@ get_entry_root() {
 
 # removes a systemd-boot entry
 remove_entry() {
-    [[ ${1} =~ ^$(get_entry_root "${esp}").* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
+    [[ ${1} =~ ^$(get_entry_root "${ESP}").* || ${PRESERVE_FOREIGN} != "yes" ]] && rm "$1"
 }
 
 # installs and configures systemd-boot
 setup_sdboot() {
-    if $bootctl status &> /dev/null; then
+    if bootctl status &> /dev/null; then
         echo -e "systemd-boot already installed"
         exit 1
     else
-        # install systemd-boot letting it detect esp
-        $bootctl install
+        # install systemd-boot
+        bootctl --esp-path=${ESP} install
 
         # create a simple loader.conf
-        esp=$($bootctl -p)
-        echo "timeout 3" > "${esp}/loader/loader.conf"
+        echo "timeout 3" > "${ESP}/loader/loader.conf"
 
         # generate entries, ensure an initial set of entries is generated
         [[ ${DEFAULT_ENTRY} != "oldest" ]] && DEFAULT_ENTRY="latest"
@@ -73,14 +90,12 @@ setup_sdboot() {
 }
 
 generate_entries() {
-    # get the esp path
-    esp=$($bootctl -p)
     root='/'
 
     # First, ensure we have a valid config
-    if [[ -f ${esp}/loader/loader.conf ]]; then
+    if [[ -f ${ESP}/loader/loader.conf ]]; then
         # only build entries if there is some place to put them
-        if [[ -d ${esp}/loader/entries ]]; then
+        if [[ -d ${ESP}/loader/entries ]]; then
             srcdev=$(findmnt -no SOURCE ${root})
             srcdev_uuid=$(findmnt -no UUID ${root})
             srcdev_partuuid=$(findmnt -no PARTUUID ${root})
@@ -156,13 +171,13 @@ generate_entries() {
             ucode=""
             while read -r ucodefile; do
                 ucode="${ucode}initrd\t${ucodefile}\n"
-            done < <(find "${esp}" -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n")
+            done < <(find "${ESP}" -maxdepth 2 -type f -iname "*ucode.img" -printf "/%P\n")
 
             # when remove existing is set we want to start from an empty slate
             if [[ ${REMOVE_EXISTING,,} == "yes" ]]; then
                 while read -r entry; do
                     remove_entry "${entry}"
-                done < <(find "${esp}/loader/entries" -type f -name "*.conf")
+                done < <(find "${ESP}/loader/entries" -type f -name "*.conf")
             fi
 
             # create entries for each installed kernel
@@ -171,31 +186,31 @@ generate_entries() {
                 arch=$(echo "${kernel}" | awk -F- '{print $3}')
 
                 # first validate we don't already have an entry for this kernel
-                [[ ${OVERWRITE_EXISTING,,} != "yes" && -f $(get_entry_root "$esp" "$kernelnum")${kernelnum}.conf ]] && continue
+                [[ ${OVERWRITE_EXISTING,,} != "yes" && -f $(get_entry_root "$ESP" "$kernelnum")${kernelnum}.conf ]] && continue
 
                 title=${ENTRY_TITLE}
                 if [[ ${ENTRY_APPEND_KVER,,} == "yes" ]]; then
                     title="${title} ${kernelnum}"
                 fi
 
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum").conf"
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$esp" "$kernelnum")-fallback.conf"
-            done < <(find "${esp}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n")
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum").conf"
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum")-fallback.conf"
+            done < <(find "${ESP}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n")
 
             # set the default entry in loader.conf
-            entryroot=$(get_entry_root "${esp}")
+            entryroot=$(get_entry_root "${ESP}")
             if [[ ${DEFAULT_ENTRY} == "latest" ]]; then
                 defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -Vr | head -1)
-                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
+                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${ESP}/loader/loader.conf"
             elif [[ ${DEFAULT_ENTRY} == "oldest" ]]; then
                 defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -V | head -1 )
-                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${esp}/loader/loader.conf"
+                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${ESP}/loader/loader.conf"
             fi
         else
-            echo "Error: ${esp}/loader/entries does not exist"
+            echo "Error: ${ESP}/loader/entries does not exist"
         fi
     else
-        echo "Error: ${esp}/loader/loader.conf does not exist"
+        echo "Error: ${ESP}/loader/loader.conf does not exist"
     fi
 }
 
@@ -203,14 +218,11 @@ generate_entries() {
 remove_orphan_entries() {
     [[ ${REMOVE_OBSOLETE,,} != "yes" ]] && return
 
-    # get the esp path
-    esp=$($bootctl -p)
-
     # find and remove all the entries with unmatched kernels
-    for kernel in $(comm -13 <(find "${esp}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n" | uniq | sort) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
+    for kernel in $(comm -13 <(find "${ESP}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n" | uniq | sort) <(cat "${ESP}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
         while read -r entry; do
             remove_entry "${entry}"
-        done < <(grep -l "${kernel}" "${esp}"/loader/entries/*)
+        done < <(grep -l "${kernel}" "${ESP}"/loader/entries/*)
     done
 }
 
@@ -220,7 +232,7 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-$bootctl status &> /dev/null
+bootctl status &> /dev/null
 if [[ $? == 1 && $1 != "setup" ]]; then
     echo -e "systemd-boot not installed\nTry sdboot-manage setup to install"
     exit 1
@@ -231,7 +243,7 @@ case $1 in
         [[ ${NO_AUTOGEN} != "yes" ]] && generate_entries
         ;;
     autoupdate)
-        [[ ${NO_AUTOUPDATE} != "yes" ]] && $bootctl update
+        [[ ${NO_AUTOUPDATE} != "yes" ]] && bootctl --esp-path=${ESP} update
         ;;
     gen)
         generate_entries
@@ -243,7 +255,7 @@ case $1 in
         setup_sdboot
         ;;
     update)
-        $bootctl update
+        bootctl --esp-path=${ESP} update
         ;;
     *)
         usage
