@@ -2,8 +2,23 @@
 #
 # sdboot-manage provides automation for systemd-boot on systems with multiple kernels
 
+usage() {
+    echo "Usage: sdboot-manage [action] [option]"
+    echo ""
+    echo "Actions:"
+    echo "  gen     generates entries for systemd-boot based on installed kernels"
+    echo "  remove  removes orphaned systemd-boot entries"
+    echo "  setup   installs systemd-boot and generate initial entries"
+    echo "  update  updates systemd-boot"
+    echo ""
+    echo "Optional Argument:"
+    echo "  --esp-path=<path>  specify <path> for sdboot-manage to work on"
+    exit 1
+}
+
 config=/etc/sdboot-manage.conf
-bootctl=/usr/bin/bootctl
+[[ ! -z $2 ]] && [[ ! $2 =~ --esp-path=.+ ]] && usage
+bootctl="/usr/bin/bootctl ""$2"
 
 # config variables
 export  LINUX_OPTIONS \
@@ -25,17 +40,6 @@ export  LINUX_OPTIONS \
 
 # Load the config file
 [[ -f ${config} ]] && . "${config}"
-
-usage() {
-    echo "Usage: sdboot-manage [action]"
-    echo ""
-    echo "Actions:"
-    echo "  gen     generates entries for systemd-boot based on installed kernels"
-    echo "  remove  removes orphaned systemd-boot entries"
-    echo "  setup   installs systemd-boot and generate initial entries"
-    echo "  update  updates systemd-boot"
-    exit 1
-}
 
 get_entry_root() {
     echo -n "$1/loader/entries/${ENTRY_ROOT}"
@@ -59,7 +63,7 @@ setup_sdboot() {
         $bootctl install
 
         # create a simple loader.conf
-        esp=$(bootctl -p)
+        esp=$($bootctl -p)
         echo "timeout 3" > "${esp}/loader/loader.conf"
 
         # generate entries, ensure an initial set of entries is generated
@@ -70,7 +74,7 @@ setup_sdboot() {
 
 generate_entries() {
     # get the esp path
-    esp=$(bootctl -p)
+    esp=$($bootctl -p)
     root='/'
 
     # First, ensure we have a valid config
@@ -200,7 +204,7 @@ remove_orphan_entries() {
     [[ ${REMOVE_OBSOLETE,,} != "yes" ]] && return
 
     # get the esp path
-    esp=$(bootctl -p)
+    esp=$($bootctl -p)
 
     # find and remove all the entries with unmatched kernels
     for kernel in $(comm -13 <(find "${esp}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n" | uniq | sort) <(cat "${esp}"/loader/entries/* | grep -i "^linux" | awk '{print $2}' | uniq | sort)); do
