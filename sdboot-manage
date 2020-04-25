@@ -133,7 +133,7 @@ generate_entries() {
                     # handle cryptdevice
                     sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
                     if [[ ${DISCARD,,} == "yes" ]]; then
-                        sdoptions="${sdoptions}:allow-discard"
+                        sdoptions="${sdoptions}:allow-discards"
                     fi
                 fi
             done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${top_level_uuid}" 2> /dev/null)
