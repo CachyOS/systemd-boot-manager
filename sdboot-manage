@@ -106,6 +106,7 @@ generate_entries() {
             srcdev_partuuid=$(findmnt -no PARTUUID ${root})
             srcdev_fsroot=$(findmnt -no FSROOT ${root})
             root_fstype=$(findmnt -no FSTYPE ${root})
+            mkinitcpio_has_sdencrypt_hook=$(grep -cE '^HOOKS=\(.*sd-encrypt.*\)$' /etc/mkinitcpio.conf)
 
             # generate an appropriate options line
             case ${root_fstype} in
@@ -151,9 +152,19 @@ generate_entries() {
             while read -r devname devtype; do
                 if [[ $devtype == crypt ]]; then
                     # handle cryptdevice
-                    sdoptions="${sdoptions} cryptdevice=UUID=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')"):${devname}"
+                    cryptdevice_option_prefix="cryptdevice=UUID"
+                    cryptdevice_option_suffix=":"
+                    if [[ ${mkinitcpio_has_sdencrypt_hook} > 0 ]]; then
+                        cryptdevice_option_prefix="rd.luks.name"
+                        cryptdevice_option_suffix="="
+                    fi
+                    sdoptions="${sdoptions} ${cryptdevice_option_prefix}=$(blkid -o value -s UUID "$(cryptsetup status "${devname}" | grep device | awk '{print $2}')")${cryptdevice_option_suffix}${devname}"
                     if [[ ${DISCARD,,} == "yes" ]]; then
-                        sdoptions="${sdoptions}:allow-discards"
+                        if [[ ${mkinitcpio_has_sdencrypt_hook} > 0 ]]; then
+                            sdoptions="${sdoptions} rd.luks.options=discard"
+                        else
+                            sdoptions="${sdoptions}:allow-discards"
+                        fi
                     fi
                 fi
             done < <(lsblk -nslo NAME,TYPE /dev/disk/by-uuid/"${top_level_uuid}" 2> /dev/null)
