@@ -106,7 +106,7 @@ generate_entries() {
             srcdev_partuuid=$(findmnt -no PARTUUID ${root})
             srcdev_fsroot=$(findmnt -no FSROOT ${root})
             root_fstype=$(findmnt -no FSTYPE ${root})
-            mkinitcpio_has_sdencrypt_hook=$(grep -cE '^HOOKS=\(.*sd-encrypt.*\)$' /etc/mkinitcpio.conf)
+            mkinitcpio_has_sdencrypt_hook=$(grep -c '^HOOKS=\(.*sd-encrypt.*\)$' /etc/mkinitcpio.conf)
 
             # generate an appropriate options line
             case ${root_fstype} in
