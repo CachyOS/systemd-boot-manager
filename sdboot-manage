@@ -209,8 +209,11 @@ generate_entries() {
                     title="${title} ${kernelnum}"
                 fi
 
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum").conf"
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum")-fallback.conf"
+                # get the kernel location so the initrd can be written to the same location as the kernel
+                [[ $(dirname ${kernel}) == "/" ]] && kernelpath="" || kernelpath=$(dirname ${kernel})
+
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t${kernelpath}/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum").conf"
+                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t${kernelpath}/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum")-fallback.conf"
             done < <(find "${ESP}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n")
 
             if [[ ! "$(ls -A ${ESP}/loader/entries)" ]]; then
