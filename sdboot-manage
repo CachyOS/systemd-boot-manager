@@ -78,10 +78,7 @@ remove_entry() {
 
 # installs and configures systemd-boot
 setup_sdboot() {
-    if [ $(bootctl status 2>&1 >/dev/null) ]; then
-        echo -e "systemd-boot already installed"
-        exit 1
-    else
+    if [[ $(bootctl status 2>&1 >/dev/null) ]]; then
         # install systemd-boot
         bootctl --esp-path=${ESP} install
 
@@ -91,6 +88,9 @@ setup_sdboot() {
         # generate entries, ensure an initial set of entries is generated
         [[ ${DEFAULT_ENTRY} != "oldest" ]] && DEFAULT_ENTRY="latest"
         generate_entries
+    else
+        echo -e "systemd-boot already installed"
+        exit 1
     fi
 }
 
