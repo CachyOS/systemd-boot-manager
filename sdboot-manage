@@ -78,7 +78,7 @@ remove_entry() {
 
 # installs and configures systemd-boot
 setup_sdboot() {
-    if bootctl status &> /dev/null; then
+    if [ $(bootctl status 2>&1 >/dev/null) ]; then
         echo -e "systemd-boot already installed"
         exit 1
     else
