@@ -73,3 +73,6 @@ The configuration file is located at `/etc/sdboot-manage.conf`.  The displayed o
 # setting NO_AUTOGEN to "yes" will stop the automatic creation of entries when kernels are installed or updated
 #NO_AUTOGEN="no"
 ```
+
+Notes:
+* Hibernation into a swapfile on BTRFS is not currently supported.
