@@ -225,10 +225,10 @@ generate_entries() {
             entryroot=$(get_entry_root "${ESP}")
             if [[ ${DEFAULT_ENTRY} == "latest" ]]; then
                 defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -Vr | head -1)
-                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${ESP}/loader/loader.conf"
+                sed '/^default/{h;s/.*/default '"${defentry}"'/};${x;/^$/{s//default '"${defentry}"'/;H};x}' -i "${ESP}/loader/loader.conf"
             elif [[ ${DEFAULT_ENTRY} == "oldest" ]]; then
                 defentry=$(find "${entryroot%/*}" -maxdepth 2 -type f -name "${entryroot##*/}*" -printf "%P\n" | grep -v 'fallback.conf$' | sort -V | head -1 )
-                sed '/^default/{h;s/.*/default '"${defentry%.*}"'/};${x;/^$/{s//default '"${defentry%.*}"'/;H};x}' -i "${ESP}/loader/loader.conf"
+                sed '/^default/{h;s/.*/default '"${defentry}"'/};${x;/^$/{s//default '"${defentry}"'/;H};x}' -i "${ESP}/loader/loader.conf"
             fi
         else
             echo "Error: ${ESP}/loader/entries does not exist"
