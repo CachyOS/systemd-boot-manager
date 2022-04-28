@@ -48,6 +48,7 @@ export  LINUX_OPTIONS \
         LINUX_FALLBACK_OPTIONS \
         LINUX_USE_SWAP_FOR_RESUME \
         DEFAULT_ENTRY="latest" \
+        DISABLE_FALLBACK="no" \
         ENTRY_ROOT="manjarolinux" \
         ENTRY_TITLE="Manjaro Linux" \
         ENTRY_APPEND_KVER="yes" \
@@ -59,7 +60,7 @@ export  LINUX_OPTIONS \
         NO_AUTOGEN \
         NO_AUTOUPDATE \
         CDISCARD \
-        DISCARD 
+        DISCARD
 
 # Load the config file
 [[ -f ${config} ]] && . "${config}"
@@ -213,7 +214,11 @@ generate_entries() {
                 [[ $(dirname ${kernel}) == "/" ]] && kernelpath="" || kernelpath=$(dirname ${kernel})
 
                 echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t${kernelpath}/initramfs-${kernelnum}-${arch}.img\noptions\t${sdoptions} ${LINUX_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum").conf"
-                echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t${kernelpath}/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum")-fallback.conf"
+                if [[ ${DISABLE_FALLBACK} != "yes" ]]; then
+                    echo -e "title\t${title}\nlinux\t${kernel}\n${ucode}initrd\t${kernelpath}/initramfs-${kernelnum}-${arch}-fallback.img\noptions\t${sdoptions} ${LINUX_FALLBACK_OPTIONS}" > "$(get_entry_root "$ESP" "$kernelnum")-fallback.conf"
+                fi
+
+
             done < <(find "${ESP}" -maxdepth 2 -type f -name "${KERNEL_PATTERN}" -printf "/%P\n")
 
             if [[ ! "$(ls -A ${ESP}/loader/entries)" ]]; then
