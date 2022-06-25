@@ -10,7 +10,7 @@ depends=(systemd
          findutils
          grep
          gawk)
-source=(git+https://gitlab.com/dalto.8/systemd-boot-manager.git)
+source=(git+$url.git)
 sha256sums=('SKIP')
 package()
 {
