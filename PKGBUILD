@@ -1,16 +1,16 @@
 pkgname=systemd-boot-manager
-pkgver=0.9
+pkgver=1
 pkgrel=1
-pkgdesc='A simple tool to maintain systemd-boot & systemd-boot entries for Manjaro'
+pkgdesc='A simple tool to maintain systemd-boot & systemd-boot entries for CachyOS'
 arch=(any)
-url='https://gitlab.com/dalto.8/systemd-boot-manager'
+url='https://github.com/cachyos/systemd-boot-manager'
 license=(GPL2)
 backup=('etc/sdboot-manage.conf')
 depends=(systemd
          findutils
          grep
          gawk)
-source=(git+https://gitlab.com/dalto.8/systemd-boot-manager.git#tag=$pkgver)
+source=(git+https://gitlab.com/dalto.8/systemd-boot-manager.git)
 sha256sums=('SKIP')
 package()
 {

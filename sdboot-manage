@@ -49,8 +49,8 @@ export  LINUX_OPTIONS \
         LINUX_USE_SWAP_FOR_RESUME \
         DEFAULT_ENTRY="latest" \
         DISABLE_FALLBACK="no" \
-        ENTRY_ROOT="manjarolinux" \
-        ENTRY_TITLE="Manjaro Linux" \
+        ENTRY_ROOT="cachyos" \
+        ENTRY_TITLE="CachyOS" \
         ENTRY_APPEND_KVER="yes" \
         KERNEL_PATTERN="vmlinuz-[0-9]*-*" \
         REMOVE_EXISTING="yes" \
@@ -84,7 +84,7 @@ setup_sdboot() {
         bootctl --esp-path=${ESP} install
 
         # create a simple loader.conf
-        echo "timeout 3" > "${ESP}/loader/loader.conf"
+        echo "timeout 7" > "${ESP}/loader/loader.conf"
 
         # generate entries, ensure an initial set of entries is generated
         [[ ${DEFAULT_ENTRY} != "oldest" ]] && DEFAULT_ENTRY="latest"

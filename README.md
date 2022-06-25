@@ -1,6 +1,6 @@
-# systemd-boot Manager for Manjaro
+# systemd-boot Manager for CachyOS
 
-This projects attempts to add automation for users of systemd-boot with Manjaro.  It has 3 components.
+This projects attempts to add automation for users of systemd-boot with CachyOS.  It has 3 components.
 
 ##### 1. A shell script which provides the following functionality
   * Installs and configures systemd-boot
@@ -32,7 +32,7 @@ The script was tested for basic functionality in the following root filesystem c
 * ext4 on lvm on luks
 * ext4 on luks on lvm
 
-I don't know of any reason it wouldn't support every filesystem that manjaro-architect supports with the exception of ntfs.  Hopefully people are not using ntfs as their root fs.
+I don't know of any reason it wouldn't support every filesystem that cachyos-cli-installer supports with the exception of ntfs.  Hopefully people are not using ntfs as their root fs.
 
 ### Configuration
 The configuration file is located at `/etc/sdboot-manage.conf`.  The displayed options are the defaults and it has the following structure.
@@ -44,15 +44,15 @@ The configuration file is located at `/etc/sdboot-manage.conf`.  The displayed o
 #LINUX_FALLBACK_OPTIONS=""
 
 # the DEFAULT_ENTRY option determines if and how the default entry in loader.conf should be managed
-#   "latest"    The most recent Manjaro kernel will be used(the one with the highest version number)
-#   "oldest"    The oldest Manjaro kernel will be used(the one with the lowest version number)
+#   "latest"    The most recent CachyOS kernel will be used(the one with the highest version number)
+#   "oldest"    The oldest CachyOS kernel will be used(the one with the lowest version number)
 #   "manual"    Don't modify the default setting
 #DEFAULT_ENTRY="latest"
 
 # ENTRY_ROOT is a template that describes the beginning of the name for system-boot entries
 # The ENTRY_ROOT will be followed by the kernel version number
-# For example, if ENTRY_ROOT="manjaro" and you are using kernel 4.19 your entry will be named "manjaro4.19.conf"
-#ENTRY_ROOT="manjarolinux"
+# For example, if ENTRY_ROOT="cachyos" and you are using kernel 4.19 your entry will be named "cachyos4.19.conf"
+#ENTRY_ROOT="cachyoslinux"
 
 # setting REMOVE_EXISTING to "yes" will remove all your existing systemd-boot entries before building new entries
 #REMOVE_EXISTING="yes"
